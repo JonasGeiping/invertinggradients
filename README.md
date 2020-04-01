@@ -2,9 +2,13 @@
 
 This repository is an implementation of the reconstruction algorithm discussed in
 ```
-Inverting Gradients - How easy is it to break Privacy in Federated Learning?
-Geiping, Bauermeister, Dröge, Moeller
+Jonas Geiping, Hartmut Bauermeister, Hannah Dröge, and Michael Moeller. 
+Inverting Gradients -- How Easy Is It to Break Privacy in Federated Learning?, 
+March 31, 2020. 
+https://arxiv.org/abs/2003.14053v1.
+
 ```
+which can be found at https://arxiv.org/abs/2003.14053
 
 Input Image             |  Reconstruction from gradient information
 :-------------------------:|:-------------------------:
