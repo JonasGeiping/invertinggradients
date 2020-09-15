@@ -59,7 +59,7 @@ class GradientReconstructor():
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
         self.iDLG = True
 
-    def reconstruct(self, input_data, labels, img_shape=(3, 32, 32), dryrun=False, eval=True):
+    def reconstruct(self, input_data, labels, img_shape=(3, 32, 32), dryrun=False, eval=True, tol=None):
         """Reconstruct image from gradient."""
         start_time = time.time()
         if eval:
@@ -95,6 +95,8 @@ class GradientReconstructor():
                 # Finalize
                 scores[trial] = self._score_trial(x_trial, input_data, labels)
                 x[trial] = x_trial
+                if tol is not None and scores[trial] <= tol:
+                    break
                 if dryrun:
                     break
         except KeyboardInterrupt:
@@ -168,8 +170,8 @@ class GradientReconstructor():
                     if self.config['boxed']:
                         x_trial.data = torch.max(torch.min(x_trial, (1 - dm) / ds), -dm / ds)
 
-                    if iteration + 1 == max_iterations:   # or iteration % 100 == 0:
-                        print(f'It: {iteration + 1}. Rec. loss: {rec_loss.item():2.4f}.')
+                    if (iteration + 1 == max_iterations) or iteration % 500 == 0:
+                        print(f'It: {iteration}. Rec. loss: {rec_loss.item():2.4f}.')
 
                     if (iteration + 1) % 500 == 0:
                         if self.config['filter'] == 'none':
