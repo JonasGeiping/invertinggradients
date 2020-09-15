@@ -251,19 +251,22 @@ class FedAvgReconstructor(GradientReconstructor):
     """Reconstruct an image from weights after n gradient descent steps."""
 
     def __init__(self, model, mean_std=(0.0, 1.0), local_steps=2, local_lr=1e-4,
-                 config=DEFAULT_CONFIG, num_images=1, use_updates=True):
+                 config=DEFAULT_CONFIG, num_images=1, use_updates=True, batch_size=0):
         """Initialize with model, (mean, std) and config."""
         super().__init__(model, mean_std, config, num_images)
         self.local_steps = local_steps
         self.local_lr = local_lr
         self.use_updates = use_updates
+        self.batch_size = batch_size
 
     def _gradient_closure(self, optimizer, x_trial, input_parameters, labels):
         def closure():
             optimizer.zero_grad()
             self.model.zero_grad()
             parameters = loss_steps(self.model, x_trial, labels, loss_fn=self.loss_fn,
-                                    local_steps=self.local_steps, lr=self.local_lr, use_updates=self.use_updates)
+                                    local_steps=self.local_steps, lr=self.local_lr,
+                                    use_updates=self.use_updates,
+                                    batch_size=self.batch_size)
             rec_loss = reconstruction_costs([parameters], input_parameters,
                                             cost_fn=self.config['cost_fn'], indices=self.config['indices'],
                                             weights=self.config['weights'])
@@ -291,14 +294,20 @@ class FedAvgReconstructor(GradientReconstructor):
             return self.inception(x_trial)
 
 
-def loss_steps(model, inputs, labels, loss_fn=torch.nn.CrossEntropyLoss(), lr=1e-4, local_steps=4, use_updates=True):
+def loss_steps(model, inputs, labels, loss_fn=torch.nn.CrossEntropyLoss(), lr=1e-4, local_steps=4, use_updates=True, batch_size=0):
     """Take a few gradient descent steps to fit the model to the given input."""
     patched_model = MetaMonkey(model)
     if use_updates:
         patched_model_origin = deepcopy(patched_model)
-    for _ in range(local_steps):
-        outputs = patched_model(inputs, patched_model.parameters)
-        loss = loss_fn(outputs, labels).sum()
+    for i in range(local_steps):
+        if batch_size == 0:
+            outputs = patched_model(inputs, patched_model.parameters)
+            labels_ = labels
+        else:
+            idx = i % (inputs.shape[0] // batch_size)
+            outputs = patched_model(inputs[idx * batch_size:(idx + 1) * batch_size], patched_model.parameters)
+            labels_ = labels[i * batch_size:(i + 1) * batch_size]
+        loss = loss_fn(outputs, labels_).sum()
         grad = torch.autograd.grad(loss, patched_model.parameters.values(),
                                    retain_graph=True, create_graph=True, only_inputs=True)
 
