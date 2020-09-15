@@ -93,6 +93,9 @@ def construct_model(model, num_classes=10, seed=None, num_channels=3, modelkey=N
         model = ResNet(torchvision.models.resnet.BasicBlock, [3, 3, 3], num_classes=num_classes, base_width=16 * 10)
     elif model == 'ResNet20-4':
         model = ResNet(torchvision.models.resnet.BasicBlock, [3, 3, 3], num_classes=num_classes, base_width=16 * 4)
+    elif model == 'ResNet20-4-unpooled':
+        model = ResNet(torchvision.models.resnet.BasicBlock, [3, 3, 3], num_classes=num_classes, base_width=16 * 4,
+                       pool='max')
     elif model == 'ResNet28-10':
         model = ResNet(torchvision.models.resnet.BasicBlock, [4, 4, 4], num_classes=num_classes, base_width=16 * 10)
     elif model == 'ResNet32':
@@ -111,6 +114,8 @@ def construct_model(model, num_classes=10, seed=None, num_channels=3, modelkey=N
         model = ResNet(torchvision.models.resnet.BasicBlock, [3, 4, 6, 3], num_classes=num_classes, base_width=64)
     elif model == 'ResNet50':
         model = ResNet(torchvision.models.resnet.Bottleneck, [3, 4, 6, 3], num_classes=num_classes, base_width=64)
+    elif model == 'ResNet50-2':
+        model = ResNet(torchvision.models.resnet.Bottleneck, [3, 4, 6, 3], num_classes=num_classes, base_width=64 * 2)
     elif model == 'ResNet101':
         model = ResNet(torchvision.models.resnet.Bottleneck, [3, 4, 23, 3], num_classes=num_classes, base_width=64)
     elif model == 'ResNet152':
@@ -171,7 +176,7 @@ class ResNet(torchvision.models.ResNet):
 
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
                  groups=1, base_width=64, replace_stride_with_dilation=None,
-                 norm_layer=None, strides=[1, 2, 2, 2]):
+                 norm_layer=None, strides=[1, 2, 2, 2], pool='avg'):
         """Initialize as usual. Layers and strides are scriptable."""
         super(torchvision.models.ResNet, self).__init__()  # nn.Module
         if norm_layer is None:
@@ -201,7 +206,7 @@ class ResNet(torchvision.models.ResNet):
             self.layers.append(self._make_layer(block, width, layer, stride=strides[idx], dilate=replace_stride_with_dilation[idx]))
             width *= 2
 
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.pool = nn.AdaptiveAvgPool2d((1, 1)) if pool == 'avg' else nn.AdaptiveMaxPool2d((1, 1))
         self.fc = nn.Linear(width // 2 * block.expansion, num_classes)
 
         for m in self.modules():
@@ -231,7 +236,7 @@ class ResNet(torchvision.models.ResNet):
         for layer in self.layers:
             x = layer(x)
 
-        x = self.avgpool(x)
+        x = self.pool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
 

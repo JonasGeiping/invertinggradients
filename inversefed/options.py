@@ -28,6 +28,10 @@ def options():
     parser.add_argument('--indices', default='def', type=str, help='Choice of indices from the parameter list.')
     parser.add_argument('--weights', default='equal', type=str, help='Weigh the parameter list differently.')
 
+    parser.add_argument('--optimizer', default='adam', type=str, help='Weigh the parameter list differently.')
+    parser.add_argument('--signed', action='store_false', help='Do not used signed gradients.')
+    parser.add_argument('--boxed', action='store_false', help='Do not used box constraints.')
+
     parser.add_argument('--scoring_choice', default='loss', type=str, help='How to find the best image between all restarts.')
     parser.add_argument('--init', default='randn', type=str, help='Choice of image initialization.')
     parser.add_argument('--tv', default=1e-4, type=float, help='Weight of TV penalty.')

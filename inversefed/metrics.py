@@ -28,7 +28,7 @@ class InceptionScore(torch.nn.Module):
             scores.append(self.model(input))
         prob_yx = torch.nn.functional.softmax(torch.cat(scores, 0), dim=1)
         entropy = torch.where(prob_yx > 0, -prob_yx * prob_yx.log(), torch.zeros_like(prob_yx))
-        return entropy.mean()
+        return entropy.sum()
 
 
 def psnr(img_batch, ref_batch, batched=False, factor=1.0):

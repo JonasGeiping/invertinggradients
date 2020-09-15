@@ -10,19 +10,19 @@ from copy import deepcopy
 
 import time
 
-DEFAULT_CONFIG = dict(signed=True,
+DEFAULT_CONFIG = dict(signed=False,
                       boxed=True,
                       cost_fn='sim',
-                      indices='topk-1',
+                      indices='def',
                       weights='equal',
-                      lr=0.01,
+                      lr=0.1,
                       optim='adam',
-                      restarts=128,
-                      max_iterations=8_000,
-                      total_variation=0,
+                      restarts=1,
+                      max_iterations=4800,
+                      total_variation=1e-1,
                       init='randn',
                       filter='none',
-                      lr_decay=False,
+                      lr_decay=True,
                       scoring_choice='loss')
 
 def _label_to_onehot(target, num_classes=100):
