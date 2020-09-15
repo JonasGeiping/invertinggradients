@@ -36,35 +36,31 @@ if __name__ == "__main__":
     # Prepare for training
 
     # Get data:
-    loss_fn, trainloader, validloader = inversefed.construct_dataloaders(args.dataset, defs)
+    loss_fn, trainloader, validloader = inversefed.construct_dataloaders(args.dataset, defs, data_path=args.data_path)
 
-    model, model_seed = inversefed.construct_model(args.model, num_classes=10, num_channels=3)
     dm = torch.as_tensor(getattr(inversefed.consts, f'{args.dataset.lower()}_mean'), **setup)[:, None, None]
     ds = torch.as_tensor(getattr(inversefed.consts, f'{args.dataset.lower()}_std'), **setup)[:, None, None]
+
+    if args.dataset == 'ImageNet':
+        if args.model == 'ResNet152':
+            model = torchvision.models.resnet152(pretrained=args.trained_model)
+        else:
+            model = torchvision.models.resnet18(pretrained=args.trained_model)
+        model_seed = None
+    else:
+        model, model_seed = inversefed.construct_model(args.model, num_classes=10, num_channels=3)
     model.to(**setup)
     model.eval()
 
-    # Load a trained model?
-    if args.trained_model:
-        file = f'{args.model}_{args.epochs}.pth'
-        try:
-            model.load_state_dict(torch.load(os.path.join(args.model_path, file), map_location=setup['device']))
-            print(f'Model loaded from file {file}.')
-        except FileNotFoundError:
-            print('Training the model ...')
-            print(repr(defs))
-            inversefed.train(model, loss_fn, trainloader, validloader, defs, setup=setup)
-            torch.save(model.state_dict(), os.path.join(args.model_path, file))
-
     # Sanity check: Validate model accuracy
     training_stats = defaultdict(list)
-    inversefed.training.training_routine.validate(model, loss_fn, validloader, defs, setup, training_stats)
-    name, format = loss_fn.metric()
-    print(f'Val loss is {training_stats["valid_losses"][-1]:6.4f}, Val {name}: {training_stats["valid_" + name][-1]:{format}}.')
+    # inversefed.training.training_routine.validate(model, loss_fn, validloader, defs, setup, training_stats)
+    # name, format = loss_fn.metric()
+    # print(f'Val loss is {training_stats["valid_losses"][-1]:6.4f}, Val {name}: {training_stats["valid_" + name][-1]:{format}}.')
 
     # Choose example images from the validation set or from third-party sources
     if args.num_images == 1:
-        if args.target_id == -1:
+        if args.target_id == -1:  # demo image
             # Specify PIL filter for lower pillow versions
             ground_truth = torch.as_tensor(np.array(Image.open("auto.jpg").resize((32, 32), Image.BICUBIC)) / 255, **setup)
             ground_truth = ground_truth.permute(2, 0, 1).sub(dm).div(ds).unsqueeze(0).contiguous()
@@ -105,9 +101,12 @@ if __name__ == "__main__":
 
     # Run reconstruction
     if args.accumulation == 0:
+        model.zero_grad()
         target_loss, _, _ = loss_fn(model(ground_truth), labels)
         input_gradient = torch.autograd.grad(target_loss, model.parameters())
         input_gradient = [grad.detach() for grad in input_gradient]
+        full_norm = torch.stack([g.norm() for g in input_gradient]).mean()
+        print(f'Full gradient norm is {full_norm:e}.')
 
         # Run reconstruction in different precision?
         if args.dtype != 'float':
@@ -126,30 +125,30 @@ if __name__ == "__main__":
             model.eval()
 
         if args.optim == 'ours':
-            config = dict(signed=True,
-                          boxed=True,
+            config = dict(signed=args.signed,
+                          boxed=args.boxed,
                           cost_fn=args.cost_fn,
-                          indices=args.indices,
-                          weights=args.weights,
+                          indices='def',
+                          weights='equal',
                           lr=0.1,
-                          optim='adam',
+                          optim=args.optimizer,
                           restarts=args.restarts,
-                          max_iterations=4_000,
+                          max_iterations=24_000,
                           total_variation=args.tv,
-                          init=args.init,
+                          init='randn',
                           filter='none',
                           lr_decay=True,
-                          scoring_choice=args.scoring_choice)
+                          scoring_choice='loss')
         elif args.optim == 'zhu':
             config = dict(signed=False,
                           boxed=False,
                           cost_fn='l2',
                           indices='def',
                           weights='equal',
-                          lr=1,
+                          lr=1e-4,
                           optim='LBFGS',
                           restarts=args.restarts,
-                          max_iterations=500,
+                          max_iterations=300,
                           total_variation=args.tv,
                           init=args.init,
                           filter='none',
@@ -182,16 +181,16 @@ if __name__ == "__main__":
             model.to(**setup)
             model.eval()
 
-        config = dict(signed=True,
-                      boxed=True,
+        config = dict(signed=args.signed,
+                      boxed=args.boxed,
                       cost_fn=args.cost_fn,
                       indices=args.indices,
                       weights=args.weights,
-                      lr=0.1,
-                      optim='adam',
+                      lr=1,
+                      optim=args.optimizer,
                       restarts=args.restarts,
-                      max_iterations=4_000,
-                      total_variation=0,
+                      max_iterations=24_000,
+                      total_variation=args.tv,
                       init=args.init,
                       filter='none',
                       lr_decay=True,
@@ -202,11 +201,29 @@ if __name__ == "__main__":
         output, stats = rec_machine.reconstruct(input_parameters, labels, img_shape=img_shape, dryrun=args.dryrun)
 
 
-
-    # Compute stats and save to a table:
+    # Compute stats
     test_mse = (output - ground_truth).pow(2).mean().item()
     feat_mse = (model(output) - model(ground_truth)).pow(2).mean().item()
-    test_psnr = inversefed.metrics.psnr(output, ground_truth)
+    test_psnr = inversefed.metrics.psnr(output, ground_truth, factor=1 / ds)
+
+
+    # Save the resulting image
+    if args.save_image and not args.dryrun:
+        os.makedirs(args.image_path, exist_ok=True)
+        output_denormalized = torch.clamp(output * ds + dm, 0, 1)
+        rec_filename = (f'{validloader.dataset.classes[labels][0]}_{"trained" if args.trained_model else ""}'
+                        f'{args.model}_{args.cost_fn}-{args.target_id}.png')
+        torchvision.utils.save_image(output_denormalized, os.path.join(args.image_path, rec_filename))
+
+        gt_denormalized = torch.clamp(ground_truth * ds + dm, 0, 1)
+        gt_filename = (f'{validloader.dataset.classes[labels][0]}_ground_truth-{args.target_id}.png')
+        torchvision.utils.save_image(gt_denormalized, os.path.join(args.image_path, gt_filename))
+    else:
+        rec_filename = None
+        gt_filename = None
+
+
+    # Save to a table:
     print(f"Rec. loss: {stats['opt']:2.4f} | MSE: {test_mse:2.4f} | PSNR: {test_psnr:4.2f} | FMSE: {feat_mse:2.4e} |")
 
     inversefed.utils.save_to_table(args.table_path, name=f'exp_{args.name}', dryrun=args.dryrun,
@@ -234,18 +251,10 @@ if __name__ == "__main__":
                                    timing=str(datetime.timedelta(seconds=time.time() - start_time)),
                                    dtype=setup['dtype'],
                                    epochs=defs.epochs,
-                                   val_acc=training_stats["valid_" + name][-1],
+                                   val_acc=None,
+                                   rec_img=rec_filename,
+                                   gt_img=gt_filename
                                    )
-
-
-    # Save the resulting image
-    if args.save_image and not args.dryrun:
-        os.makedirs(args.image_path, exist_ok=True)
-        output_denormalized = torch.clamp(output * ds + dm, 0, 1)
-        filename = (f'{model_seed}_{"trained" if args.trained_model else ""}'
-                    f'{args.model}_{args.cost_fn}-{args.indices}_iter-{args.accumulation}.png')
-
-        torchvision.utils.save_image(output_denormalized, os.path.join(args.image_path, filename))
 
 
     # Print final timestamp
