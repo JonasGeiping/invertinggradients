@@ -3,6 +3,7 @@
 import torch
 import numpy as np
 
+
 class Loss:
     """Abstract class, containing necessary methods.
 
@@ -57,7 +58,6 @@ class PSNR(Loss):
             value = self.psnr_compute(x, y)
             return value, name, format
 
-
     @staticmethod
     def psnr_compute(img_batch, ref_batch, batched=False, factor=1.0):
         """Standard PSNR."""
@@ -100,7 +100,7 @@ class Classification(Loss):
         if x is None:
             return name, format
         else:
-            value = 0.5 * self.loss_fn(x, y)
+            value = self.loss_fn(x, y)
             return value, name, format
 
     def metric(self, x=None, y=None):

@@ -10,13 +10,13 @@ import numpy as np
 from PIL import Image
 
 import inversefed
-torch.backends.cudnn.benchmark = inversefed.consts.BENCHMARK
 
 from collections import defaultdict
 import datetime
 import time
 import os
 
+torch.backends.cudnn.benchmark = inversefed.consts.BENCHMARK
 
 # Parse input arguments
 args = inversefed.options().parse_args()
@@ -25,7 +25,7 @@ defs = inversefed.training_strategy('conservative')
 defs.epochs = args.epochs
 # 100% reproducibility?
 if args.deterministic:
-    image2graph2vec.utils.set_deterministic()
+    inversefed.utils.set_deterministic()
 
 
 if __name__ == "__main__":
