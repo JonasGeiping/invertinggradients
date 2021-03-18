@@ -306,7 +306,7 @@ def loss_steps(model, inputs, labels, loss_fn=torch.nn.CrossEntropyLoss(), lr=1e
         else:
             idx = i % (inputs.shape[0] // batch_size)
             outputs = patched_model(inputs[idx * batch_size:(idx + 1) * batch_size], patched_model.parameters)
-            labels_ = labels[i * batch_size:(i + 1) * batch_size]
+            labels_ = labels[idx * batch_size:(idx + 1) * batch_size]
         loss = loss_fn(outputs, labels_).sum()
         grad = torch.autograd.grad(loss, patched_model.parameters.values(),
                                    retain_graph=True, create_graph=True, only_inputs=True)
