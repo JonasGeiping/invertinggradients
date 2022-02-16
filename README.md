@@ -1,5 +1,14 @@
 # Inverting Gradients - How easy is it to break Privacy in Federated Learning?
 
+---------------------
+
+**Update Feb 2022: A modernized implementation of this attack (and many other attacks) is included in our newest framework for privacy attacks in FL:**
+
+**https://github.com/JonasGeiping/breaching**
+
+---------------------
+
+
 This repository is an implementation of the reconstruction algorithm discussed in
 ```
 Jonas Geiping, Hartmut Bauermeister, Hannah Dröge, and Michael Moeller. 
