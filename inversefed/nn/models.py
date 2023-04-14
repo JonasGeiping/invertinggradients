@@ -12,14 +12,14 @@ from collections import OrderedDict
 import numpy as np
 from ..utils import set_random_seed
 
-
+import random
 
 
 def construct_model(model, num_classes=10, seed=None, num_channels=3, modelkey=None):
     """Return various models."""
     if modelkey is None:
         if seed is None:
-            model_init_seed = np.random.randint(0, 2**32 - 10)
+            model_init_seed = random.randint(0, 2**32 - 10)
         else:
             model_init_seed = seed
     else:
